@@ -1,3 +1,3 @@
-pub mod utxo_parser;
-pub mod dust_policies;
 pub mod context;
+pub mod dust_policies;
+pub mod utxo_parser;

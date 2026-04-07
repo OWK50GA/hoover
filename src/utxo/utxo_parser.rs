@@ -270,7 +270,9 @@ mod tests {
                 block_height: 800_000,
                 descriptor_fingerprint: "deadbeef".to_string(),
             },
-            reason: DustReason::BelowDustLimit { threshold_sats: 546 },
+            reason: DustReason::BelowDustLimit {
+                threshold_sats: 546,
+            },
             is_spent: false,
             suspicion_score: None,
             suspicion_reasons: vec![],

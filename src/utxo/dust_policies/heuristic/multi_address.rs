@@ -56,8 +56,7 @@ pub fn count_same_sender(utxos: &[Utxo], target: &Utxo) -> u32 {
     utxos
         .iter()
         .filter(|u| {
-            u.outpoint.txid == target.outpoint.txid
-                && u.outpoint != target.outpoint // don't count self
+            u.outpoint.txid == target.outpoint.txid && u.outpoint != target.outpoint // don't count self
         })
         .count() as u32
 }
@@ -66,8 +65,8 @@ pub fn count_same_sender(utxos: &[Utxo], target: &Utxo) -> u32 {
 mod tests {
     use super::*;
     use crate::utxo::dust_policies::UtxoContext;
-    use bitcoin::{AddressType, Amount, OutPoint, ScriptBuf, Txid, hashes::Hash};
     use bdk_wallet::KeychainKind;
+    use bitcoin::{AddressType, Amount, OutPoint, ScriptBuf, Txid, hashes::Hash};
 
     fn utxo(txid_byte: u8, vout: u32) -> Utxo {
         Utxo {
@@ -138,7 +137,7 @@ mod tests {
         let u0 = utxo(shared_txid, 0);
         let u1 = utxo(shared_txid, 1); // same tx, different vout
         let u2 = utxo(shared_txid, 2); // same tx, different vout
-        let u3 = utxo(0xcc, 0);        // different tx
+        let u3 = utxo(0xcc, 0); // different tx
 
         let all = vec![u0.clone(), u1.clone(), u2.clone(), u3.clone()];
 

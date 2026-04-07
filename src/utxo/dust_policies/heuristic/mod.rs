@@ -1,6 +1,6 @@
 pub mod change_address;
-pub mod multi_address;
 pub mod exact_floor;
+pub mod multi_address;
 
 use crate::utxo::dust_policies::{SuspicionScore, UtxoContext};
 use crate::utxo::utxo_parser::Utxo;

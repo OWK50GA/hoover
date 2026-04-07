@@ -9,8 +9,9 @@ use hoover::{
     utxo::{
         context::{build_context, build_tx_cache},
         dust_policies::heuristic::{
-                DustHeuristic, aggregate, change_address::ChangeAddressHeuristic, exact_floor::ExactFloorPolicy, multi_address::MultiAddressHeuristic
-            },
+            DustHeuristic, aggregate, change_address::ChangeAddressHeuristic,
+            exact_floor::ExactFloorPolicy, multi_address::MultiAddressHeuristic,
+        },
         utxo_parser::{DustReason, DustUtxo, Utxo},
     },
     wallet_descriptor::wallet_parser::parse_descriptor,
@@ -114,17 +115,21 @@ fn list(config: Config, fingerprint: Option<String>) {
         return;
     }
 
-    let tip_height = config.rpc_client
-        .get_block_count()
-        .unwrap_or(0) as u32;
+    let tip_height = config.rpc_client.get_block_count().unwrap_or(0) as u32;
 
     let mut all_utxos: Vec<Utxo> = Vec::new();
-    let mut descriptor_map: Vec<(Utxo, &hoover::wallet_descriptor::wallet_parser::ParsedDescriptor)> = Vec::new();
+    let mut descriptor_map: Vec<(
+        Utxo,
+        &hoover::wallet_descriptor::wallet_parser::ParsedDescriptor,
+    )> = Vec::new();
 
     for descriptor in &descriptors {
-        if let Some(ref fp) = fingerprint {
-            if &descriptor.wallet_name != fp { continue; }
+        if let Some(ref fp) = fingerprint
+            && &descriptor.wallet_name != fp
+        {
+            continue;
         }
+
         match Utxo::fetch_for_descriptor(&config.rpc_client, descriptor) {
             Ok(utxos) => {
                 for u in &utxos {
@@ -132,7 +137,10 @@ fn list(config: Config, fingerprint: Option<String>) {
                 }
                 all_utxos.extend(utxos);
             }
-            Err(e) => eprintln!("Warning: failed to fetch UTXOs for {}: {e}", descriptor.wallet_name),
+            Err(e) => eprintln!(
+                "Warning: failed to fetch UTXOs for {}: {e}",
+                descriptor.wallet_name
+            ),
         }
     }
 
@@ -144,7 +152,12 @@ fn list(config: Config, fingerprint: Option<String>) {
     all_dust.retain(|d| seen.insert(d.utxo.outpoint));
 
     // Build tx cache covering all UTXOs — one getrawtransaction per unique txid
-    let tx_cache = build_tx_cache(&config.rpc_client, &all_utxos, config.dust_threshold, tip_height);
+    let tx_cache = build_tx_cache(
+        &config.rpc_client,
+        &all_utxos,
+        config.dust_threshold,
+        tip_height,
+    );
 
     // Register heuristics
     let heuristics: Vec<&dyn DustHeuristic> = vec![
@@ -200,11 +213,17 @@ fn list(config: Config, fingerprint: Option<String>) {
     }
 
     if all_dust.is_empty() {
-        println!("{} descriptor(s) registered — no dust UTXOs found.", descriptors.len());
+        println!(
+            "{} descriptor(s) registered — no dust UTXOs found.",
+            descriptors.len()
+        );
         return;
     }
 
-    config.db.upsert_utxos(&all_dust).expect("Failed to store dust to table");
+    config
+        .db
+        .upsert_utxos(&all_dust)
+        .expect("Failed to store dust to table");
 
     let rows: Vec<DustRow> = all_dust.iter().map(DustRow::from).collect();
     let table = Table::new(&rows).to_string();
@@ -242,14 +261,15 @@ impl From<&DustUtxo> for DustRow {
         let txid_short = format!("{}…{}", &txid_full[..8], &txid_full[txid_full.len() - 8..]);
 
         let reason = match &d.reason {
-            DustReason::BelowDustLimit { threshold_sats } =>
-                format!("below dust limit ({threshold_sats} sats)"),
-            DustReason::UneconomicalToSpend { fee_to_spend_sats, value_sats } =>
-                format!("uneconomical (fee {fee_to_spend_sats} > value {value_sats})"),
-            DustReason::SuspiciousRoundValue =>
-                "suspicious round value".to_string(),
-            DustReason::SuspectedAttack { score } =>
-                format!("suspected attack (score {score:.2})"),
+            DustReason::BelowDustLimit { threshold_sats } => {
+                format!("below dust limit ({threshold_sats} sats)")
+            }
+            DustReason::UneconomicalToSpend {
+                fee_to_spend_sats,
+                value_sats,
+            } => format!("uneconomical (fee {fee_to_spend_sats} > value {value_sats})"),
+            DustReason::SuspiciousRoundValue => "suspicious round value".to_string(),
+            DustReason::SuspectedAttack { score } => format!("suspected attack (score {score:.2})"),
         };
 
         DustRow {
@@ -258,7 +278,8 @@ impl From<&DustUtxo> for DustRow {
             value_sats: d.utxo.value.to_sat(),
             block_height: d.utxo.block_height,
             reason,
-            score: d.suspicion_score
+            score: d
+                .suspicion_score
                 .map(|s| format!("{:.2}", s))
                 .unwrap_or_else(|| "-".to_string()),
             wallet: d.utxo.descriptor_fingerprint.clone(),

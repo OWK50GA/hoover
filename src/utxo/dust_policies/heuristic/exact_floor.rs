@@ -1,4 +1,7 @@
-use crate::utxo::{dust_policies::{UtxoContext, heuristic::DustHeuristic}, utxo_parser::Utxo};
+use crate::utxo::{
+    dust_policies::{UtxoContext, heuristic::DustHeuristic},
+    utxo_parser::Utxo,
+};
 
 pub struct ExactFloorPolicy;
 

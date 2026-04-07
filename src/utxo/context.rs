@@ -57,9 +57,7 @@ pub fn build_tx_cache(
         let dust_output_count = tx_info
             .vout
             .iter()
-            .filter(|o| {
-                o.value.to_sat() < dust_threshold_sats
-            })
+            .filter(|o| o.value.to_sat() < dust_threshold_sats)
             .count() as u32;
 
         // Count distinct output addresses (fan-out) using script hex as key
@@ -81,24 +79,29 @@ pub fn build_tx_cache(
             .and_then(|e| {
                 let fee_sats = e.fees.base.to_sat() as f64;
                 let vsize = tx_info.vsize as f64;
-                if vsize > 0.0 { Some(fee_sats / vsize) } else { None }
+                if vsize > 0.0 {
+                    Some(fee_sats / vsize)
+                } else {
+                    None
+                }
             })
             .unwrap_or(0.0);
 
         let confirmations = tx_info.confirmations.unwrap_or(0);
-        let age_blocks = tip_height.saturating_sub(
-            tip_height.saturating_sub(confirmations)
-        );
+        let age_blocks = tip_height.saturating_sub(tip_height.saturating_sub(confirmations));
 
-        cache.insert(txid, TxInfo {
-            output_count,
-            dust_output_count,
-            input_count,
-            distinct_input_addresses,
-            output_fan_out,
-            fee_rate,
-            confirmations: age_blocks,
-        });
+        cache.insert(
+            txid,
+            TxInfo {
+                output_count,
+                dust_output_count,
+                input_count,
+                distinct_input_addresses,
+                output_fan_out,
+                fee_rate,
+                confirmations: age_blocks,
+            },
+        );
     }
 
     cache
@@ -146,9 +149,7 @@ pub fn build_context(
     // Count how many other dust UTXOs share the same sending txid (spray detection)
     let other_utxos_same_sender = all_dust
         .iter()
-        .filter(|u| {
-            u.outpoint.txid == utxo.outpoint.txid && u.outpoint != utxo.outpoint
-        })
+        .filter(|u| u.outpoint.txid == utxo.outpoint.txid && u.outpoint != utxo.outpoint)
         .count() as u32;
 
     // Count how many times this address has received outputs in the dust list
