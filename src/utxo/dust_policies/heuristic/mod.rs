@@ -1,6 +1,8 @@
 pub mod change_address;
+pub mod multi_address;
+pub mod exact_floor;
 
-use crate::utxo::dust_policy::{SuspicionScore, UtxoContext};
+use crate::utxo::dust_policies::{SuspicionScore, UtxoContext};
 use crate::utxo::utxo_parser::Utxo;
 
 /// Every heuristic implements this trait.

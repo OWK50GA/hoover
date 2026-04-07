@@ -273,6 +273,8 @@ mod tests {
             },
             reason: DustReason::BelowDustLimit { threshold_sats: 546 },
             is_spent: false,
+            suspicion_score: None,
+            suspicion_reasons: vec![]
         };
 
         store.upsert_utxos(&[dust]).unwrap();
