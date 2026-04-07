@@ -18,7 +18,7 @@ pub enum StorageError {
     #[error("failed to open database: {0}")]
     Database(#[from] DatabaseError),
     #[error("failed to begin transaction: {0}")]
-    Transaction(#[from] TransactionError),
+    Transaction(Box<TransactionError>),
     #[error("failed to open table: {0}")]
     Table(#[from] TableError),
     #[error("failed to commit transaction: {0}")]
@@ -29,6 +29,12 @@ pub enum StorageError {
     RedbStorage(#[from] RedbStorageError),
 }
 
+impl From<TransactionError> for StorageError {
+    fn from(e: TransactionError) -> Self {
+        StorageError::Transaction(Box::new(e))
+    }
+}
+
 #[derive(Debug)]
 pub struct Store {
     db: Database,
@@ -37,17 +43,21 @@ pub struct Store {
 impl Store {
     /// Opens the redb database at `path`, creating it if it doesn't exist.
     /// Ensures both application tables exist before returning.
-    pub fn open(path: &Path) -> Result<Self, StorageError> {
-        let db = Database::create(path)?;
+    pub fn open(path: &Path) -> Result<Self, Box<StorageError>> {
+        let db = Database::create(path).expect("Failed to create database");
 
         // Single write transaction to initialise tables on a fresh db.
         // open_table is a no-op if the table already exists.
-        let write_tx = db.begin_write()?;
+        let write_tx = db.begin_write().expect("Failed to begin write");
         {
-            write_tx.open_table(DESCRIPTORS)?;
-            write_tx.open_table(DUST_UTXOS)?;
+            write_tx
+                .open_table(DESCRIPTORS)
+                .expect("Failed to open table");
+            write_tx
+                .open_table(DUST_UTXOS)
+                .expect("Failed to open table");
         }
-        write_tx.commit()?;
+        write_tx.commit().expect("Failed to commit db tx");
 
         Ok(Self { db })
     }
@@ -255,14 +265,17 @@ mod tests {
 
     #[test]
     fn mark_utxos_spent_updates_flag() {
-        use bitcoin::{OutPoint, Txid, hashes::Hash};
         use crate::utxo::utxo_parser::{DustReason, DustUtxo, Utxo};
         use bitcoin::{Amount, ScriptBuf};
+        use bitcoin::{OutPoint, Txid, hashes::Hash};
 
         let dir = tempdir().unwrap();
         let store = Store::open(&dir.path().join("test.db")).unwrap();
 
-        let outpoint = OutPoint { txid: Txid::all_zeros(), vout: 0 };
+        let outpoint = OutPoint {
+            txid: Txid::all_zeros(),
+            vout: 0,
+        };
         let dust = DustUtxo {
             utxo: Utxo {
                 outpoint,
@@ -271,7 +284,9 @@ mod tests {
                 block_height: 800_000,
                 descriptor_fingerprint: "deadbeef".to_string(),
             },
-            reason: DustReason::BelowDustLimit { threshold_sats: 546 },
+            reason: DustReason::BelowDustLimit {
+                threshold_sats: 546,
+            },
             is_spent: false,
             suspicion_score: None,
             suspicion_reasons: vec![]

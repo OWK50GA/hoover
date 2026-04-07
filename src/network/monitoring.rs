@@ -1,5 +1,5 @@
-use bitcoin::{BlockHash, Txid};
 use bdk_bitcoind_rpc::bitcoincore_rpc::{Client, RpcApi};
+use bitcoin::{BlockHash, Txid};
 
 #[derive(Debug, thiserror::Error)]
 pub enum MonitorError {

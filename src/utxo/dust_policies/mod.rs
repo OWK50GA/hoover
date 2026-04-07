@@ -1,5 +1,5 @@
-pub mod static_policy;
 pub mod heuristic;
+pub mod static_policy;
 
 use bdk_wallet::KeychainKind;
 use bitcoin::{AddressType};

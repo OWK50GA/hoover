@@ -37,8 +37,8 @@ fn main() {
         _ => Auth::None,
     };
 
-    let rpc_client = Client::new(&cli.rpc_url, auth)
-        .expect("failed to connect to Bitcoin Core RPC");
+    let rpc_client =
+        Client::new(&cli.rpc_url, auth).expect("failed to connect to Bitcoin Core RPC");
 
     // Expand ~ in datadir path
     let datadir = if cli.datadir.starts_with("~") {
@@ -52,14 +52,24 @@ fn main() {
     let db_path = datadir.join("hoover.db");
     let db = Store::open(&db_path).expect("failed to open database");
 
-    let config = Config { network, db, rpc_client, dust_threshold: cli.amount };
+    let config = Config {
+        network,
+        db,
+        rpc_client,
+        dust_threshold: cli.amount,
+    };
 
     match cli.command {
-        Commands::Add { descriptor, change_descriptor, start_height } => {
-            add(config, descriptor, change_descriptor, start_height)
-        },
+        Commands::Add {
+            descriptor,
+            change_descriptor,
+            start_height,
+        } => add(config, descriptor, change_descriptor, start_height),
         Commands::List => list(config, cli.fingerprint),
-        Commands::Clean { output_dir, address } => clean(config, output_dir, address),
+        Commands::Clean {
+            output_dir,
+            address,
+        } => clean(config, output_dir, address),
         Commands::Broadcast { psbt, output_dir } => broadcast(config, psbt, output_dir),
         Commands::Status { txid } => status(config, txid),
     }
@@ -67,11 +77,11 @@ fn main() {
 
 fn get_network(chain: Chain) -> Network {
     match chain {
-        Chain::Main     => Network::Bitcoin,
-        Chain::Testnet  => Network::Testnet,
+        Chain::Main => Network::Bitcoin,
+        Chain::Testnet => Network::Testnet,
         Chain::Testnet4 => Network::Testnet4,
-        Chain::Signet   => Network::Signet,
-        Chain::Regtest  => Network::Regtest,
+        Chain::Signet => Network::Signet,
+        Chain::Regtest => Network::Regtest,
     }
 }
 
@@ -80,14 +90,23 @@ fn add(config: Config, descriptor: String, change_descriptor: Option<String>, st
         &descriptor,
         change_descriptor.as_deref(),
         config.network,
-        start_height
-    ).expect("Failed to parse descriptor");
-    config.db.upsert_descriptor(&parsed).expect("Failed to update store");
-    println!("Registered: {} (start_height={})", parsed.wallet_name, start_height);
+        start_height,
+    )
+    .expect("Failed to parse descriptor");
+    config
+        .db
+        .upsert_descriptor(&parsed)
+        .expect("Failed to update store");
+    println!(
+        "Registered: {} (start_height={})",
+        parsed.wallet_name, start_height
+    );
 }
 
 fn list(config: Config, fingerprint: Option<String>) {
-    let descriptors = config.db.load_descriptors()
+    let descriptors = config
+        .db
+        .load_descriptors()
         .expect("failed to load descriptors");
 
     if descriptors.is_empty() {
@@ -220,7 +239,7 @@ impl From<&DustUtxo> for DustRow {
     fn from(d: &DustUtxo) -> Self {
         let txid_full = d.utxo.outpoint.txid.to_string();
         // Show first 8 + "…" + last 8 chars to keep the table readable
-        let txid_short = format!("{}…{}", &txid_full[..8], &txid_full[txid_full.len()-8..]);
+        let txid_short = format!("{}…{}", &txid_full[..8], &txid_full[txid_full.len() - 8..]);
 
         let reason = match &d.reason {
             DustReason::BelowDustLimit { threshold_sats } =>
@@ -248,11 +267,13 @@ impl From<&DustUtxo> for DustRow {
 }
 
 fn clean(config: Config, output_dir: Option<PathBuf>, address: Option<String>) {
-    let out_dir = output_dir.unwrap_or_else(|| std::env::current_dir()
-        .expect("failed to get current directory"));
+    let out_dir = output_dir
+        .unwrap_or_else(|| std::env::current_dir().expect("failed to get current directory"));
 
     // Load all dust UTXOs from the DB (populated by `list`)
-    let all_dust = config.db.load_dust_utxos()
+    let all_dust = config
+        .db
+        .load_dust_utxos()
         .expect("failed to load dust UTXOs");
 
     if all_dust.is_empty() {
@@ -287,18 +308,20 @@ fn clean(config: Config, output_dir: Option<PathBuf>, address: Option<String>) {
 
     let mut written = 0usize;
     for (i, (addr, utxos)) in groups.iter().enumerate() {
-        let psbt = build_sweep_psbt(utxos)
-            .expect("failed to build sweep PSBT");
+        let psbt = build_sweep_psbt(utxos).expect("failed to build sweep PSBT");
 
         // Name: <wallet_fingerprint>-<index>.psbt
         let fingerprint = &utxos[0].utxo.descriptor_fingerprint;
         let filename = format!("{fingerprint}-{i}.psbt");
         let path = out_dir.join(&filename);
 
-        write_psbt_file(&psbt, &path)
-            .expect("failed to write PSBT file");
+        write_psbt_file(&psbt, &path).expect("failed to write PSBT file");
 
-        println!("  [{i}] {filename}  ({} input(s), address {})", utxos.len(), addr);
+        println!(
+            "  [{i}] {filename}  ({} input(s), address {})",
+            utxos.len(),
+            addr
+        );
         written += 1;
     }
 
@@ -311,17 +334,15 @@ fn clean(config: Config, output_dir: Option<PathBuf>, address: Option<String>) {
 }
 
 fn broadcast(config: Config, psbt_path: Option<PathBuf>, output_dir: Option<PathBuf>) {
-    let dir = output_dir.unwrap_or_else(|| {
-        std::env::current_dir().expect("failed to get current directory")
-    });
+    let dir = output_dir
+        .unwrap_or_else(|| std::env::current_dir().expect("failed to get current directory"));
 
     // Collect the list of files to broadcast
     let files: Vec<PathBuf> = if let Some(path) = psbt_path {
         vec![path]
     } else {
         // Scan the directory for all *.psbt files
-        let entries = std::fs::read_dir(&dir)
-            .expect("failed to read output directory");
+        let entries = std::fs::read_dir(&dir).expect("failed to read output directory");
         let mut found: Vec<PathBuf> = entries
             .filter_map(|e| e.ok())
             .map(|e| e.path())
@@ -360,31 +381,27 @@ fn broadcast(config: Config, psbt_path: Option<PathBuf>, output_dir: Option<Path
 
         let hex = bitcoin::consensus::encode::serialize_hex(&tx);
         match config.rpc_client.send_raw_transaction(hex) {
-                Ok(txid) => {
-                    println!("  ✓ {} → txid {txid}", path.display());
-                    // Mark the spent UTXOs in the DB
-                    let outpoints: Vec<bitcoin::OutPoint> = tx.input
-                        .iter()
-                        .map(|i| i.previous_output)
-                        .collect();
-                    if let Err(e) = config.db.mark_utxos_spent(&outpoints) {
-                        eprintln!("    warning: could not mark UTXOs as spent: {e}");
-                    }
-                    if let Err(e) = std::fs::remove_file(path) {
-                        eprintln!("    warning: could not delete {}: {e}", path.display());
-                    }
-                    succeeded += 1;
+            Ok(txid) => {
+                println!("  ✓ {} → txid {txid}", path.display());
+                // Mark the spent UTXOs in the DB
+                let outpoints: Vec<bitcoin::OutPoint> =
+                    tx.input.iter().map(|i| i.previous_output).collect();
+                if let Err(e) = config.db.mark_utxos_spent(&outpoints) {
+                    eprintln!("    warning: could not mark UTXOs as spent: {e}");
                 }
-                Err(e) => {
-                    eprintln!("  ✗ {} — broadcast failed: {e}", path.display());
-                    failed += 1;
+                if let Err(e) = std::fs::remove_file(path) {
+                    eprintln!("    warning: could not delete {}: {e}", path.display());
                 }
+                succeeded += 1;
             }
+            Err(e) => {
+                eprintln!("  ✗ {} — broadcast failed: {e}", path.display());
+                failed += 1;
+            }
+        }
     }
 
-    println!(
-        "\n{succeeded} broadcast(s) succeeded, {failed} failed.",
-    );
+    println!("\n{succeeded} broadcast(s) succeeded, {failed} failed.",);
     if succeeded > 0 {
         println!("Use `hoover status <txid>` to check confirmation.");
     }
@@ -399,7 +416,10 @@ fn status(config: Config, txid: String) {
         Ok(TxStatus::Unconfirmed) => {
             println!("Status: Unconfirmed (in mempool)");
         }
-        Ok(TxStatus::Confirmed { confirmations, block_hash }) => {
+        Ok(TxStatus::Confirmed {
+            confirmations,
+            block_hash,
+        }) => {
             println!("Status:        Confirmed");
             println!("Confirmations: {confirmations}");
             println!("Block hash:    {block_hash}");
