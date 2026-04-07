@@ -30,7 +30,7 @@ pub enum DustReason {
 pub struct DustUtxo {
     pub utxo: Utxo,
     pub reason: DustReason,
-    pub is_spent: bool
+    pub is_spent: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -123,7 +123,7 @@ impl Utxo {
                     reason: DustReason::BelowDustLimit {
                         threshold_sats: 546,
                     },
-                    is_spent: false
+                    is_spent: false,
                 };
                 dust_utxos.push(dust_utxo);
                 continue;
@@ -150,7 +150,10 @@ impl Utxo {
     /// required input shape for sweep PSBT construction — mixing inputs from
     /// different addresses in one transaction would reveal address linkage to
     /// an observer (common input ownership heuristic).
-    pub fn group_by_address(utxos: &[DustUtxo], network: Network) -> HashMap<Address, Vec<DustUtxo>> {
+    pub fn group_by_address(
+        utxos: &[DustUtxo],
+        network: Network,
+    ) -> HashMap<Address, Vec<DustUtxo>> {
         let mut map: HashMap<Address, Vec<DustUtxo>> = HashMap::new();
         for dust in utxos {
             // Derive the address from the script_pubkey. Skip UTXOs whose
@@ -247,14 +250,19 @@ mod tests {
         let script = ScriptBuf::new_p2wpkh(&hash);
         DustUtxo {
             utxo: Utxo {
-                outpoint: OutPoint { txid: Txid::all_zeros(), vout: key_byte as u32 },
+                outpoint: OutPoint {
+                    txid: Txid::all_zeros(),
+                    vout: key_byte as u32,
+                },
                 value: Amount::from_sat(value_sats),
                 script_pubkey: script,
                 block_height: 800_000,
                 descriptor_fingerprint: "deadbeef".to_string(),
             },
-            reason: DustReason::BelowDustLimit { threshold_sats: 546 },
-            is_spent: false
+            reason: DustReason::BelowDustLimit {
+                threshold_sats: 546,
+            },
+            is_spent: false,
         }
     }
 
@@ -291,7 +299,7 @@ mod tests {
         use bitcoin::Network;
         let utxo_a1 = p2wpkh_utxo(300, 0xaa);
         let utxo_a2 = p2wpkh_utxo(200, 0xaa); // same address as a1
-        let utxo_b  = p2wpkh_utxo(100, 0xbb); // different address
+        let utxo_b = p2wpkh_utxo(100, 0xbb); // different address
         let all = vec![utxo_a1.clone(), utxo_a2.clone(), utxo_b.clone()];
 
         let groups = Utxo::group_by_address(&all, Network::Testnet);
@@ -304,9 +312,7 @@ mod tests {
     #[test]
     fn group_by_address_no_cross_address_mixing() {
         use bitcoin::Network;
-        let utxos: Vec<DustUtxo> = (0u8..5)
-            .map(|i| p2wpkh_utxo(300, i))
-            .collect();
+        let utxos: Vec<DustUtxo> = (0u8..5).map(|i| p2wpkh_utxo(300, i)).collect();
 
         let groups = Utxo::group_by_address(&utxos, Network::Testnet);
 
@@ -314,8 +320,10 @@ mod tests {
         for (addr, group_utxos) in &groups {
             let expected_script = addr.script_pubkey();
             for u in group_utxos {
-                assert_eq!(u.utxo.script_pubkey, expected_script,
-                    "cross-address mixing detected in group");
+                assert_eq!(
+                    u.utxo.script_pubkey, expected_script,
+                    "cross-address mixing detected in group"
+                );
             }
         }
     }

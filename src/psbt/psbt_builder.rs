@@ -33,7 +33,7 @@ pub enum PsbtError {
     ExtractTx(#[from] psbt::ExtractTxError),
 }
 
-pub fn build_sweep_psbt(utxos: &[DustUtxo]) -> Result<Psbt, PsbtError> {
+pub fn build_sweep_psbt(utxos: &[DustUtxo]) -> Result<Psbt, Box<PsbtError>> {
     let mut inputs = Vec::new();
     for dust_utxo in utxos {
         let current_input = TxIn {
@@ -49,7 +49,9 @@ pub fn build_sweep_psbt(utxos: &[DustUtxo]) -> Result<Psbt, PsbtError> {
     let mut outputs = Vec::new();
 
     let mut payload = PushBytesBuf::new();
-    payload.extend_from_slice(b"ash")?;
+    payload
+        .extend_from_slice(b"ash")
+        .expect("Failed to add to payload");
 
     let op_return_output = TxOut {
         value: Amount::ZERO,
@@ -65,7 +67,7 @@ pub fn build_sweep_psbt(utxos: &[DustUtxo]) -> Result<Psbt, PsbtError> {
         lock_time: LockTime::ZERO,
     };
 
-    let mut psbt = Psbt::from_unsigned_tx(tx)?;
+    let mut psbt = Psbt::from_unsigned_tx(tx).expect("Failed to build psbt");
 
     for (i, item) in utxos.iter().enumerate() {
         let script_pubkey = &item.utxo.script_pubkey;
@@ -76,10 +78,10 @@ pub fn build_sweep_psbt(utxos: &[DustUtxo]) -> Result<Psbt, PsbtError> {
                 script_pubkey: script_pubkey.clone(),
             })
         } else {
-            return Err(PsbtError::NonWitnessInput(format!(
+            return Err(Box::new(PsbtError::NonWitnessInput(format!(
                 "Outpoint {} has non-witness script_pubkey",
                 item.utxo.outpoint
-            )));
+            ))));
         }
     }
 
@@ -89,10 +91,12 @@ pub fn build_sweep_psbt(utxos: &[DustUtxo]) -> Result<Psbt, PsbtError> {
     Ok(psbt)
 }
 
-pub fn read_psbt_file(path: &Path) -> Result<Psbt, PsbtError> {
-    let base64_str = fs::read_to_string(path)?;
-    let bytes = BASE64_STANDARD.decode(base64_str)?;
-    let psbt = Psbt::deserialize(&bytes)?;
+pub fn read_psbt_file(path: &Path) -> Result<Psbt, Box<PsbtError>> {
+    let base64_str = fs::read_to_string(path).expect("Failed to read base64 to string");
+    let bytes = BASE64_STANDARD
+        .decode(base64_str)
+        .expect("Failed to decode base64 string");
+    let psbt = Psbt::deserialize(&bytes).expect("Failed to deserialize psbt");
 
     Ok(psbt)
 }
@@ -105,16 +109,16 @@ pub fn write_psbt_file(psbt: &Psbt, path: &Path) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub fn finalize_psbt(psbt: Psbt) -> Result<Transaction, PsbtError> {
+pub fn finalize_psbt(psbt: Psbt) -> Result<Transaction, Box<PsbtError>> {
     for (i, input) in psbt.inputs.iter().enumerate() {
         if input.final_script_witness.is_none() && input.final_script_sig.is_none() {
-            return Err(PsbtError::NotFinalized(i));
+            return Err(Box::new(PsbtError::NotFinalized(i)));
         }
     }
 
-    psbt.extract_tx().map_err(PsbtError::ExtractTx)
+    Ok(psbt.extract_tx().expect("Failed to extract transaction"))
 }
 
-pub fn parse_psbt(s: &str) -> Result<Psbt, PsbtError> {
-    Ok(Psbt::from_str(s)?)
+pub fn parse_psbt(s: &str) -> Result<Psbt, Box<PsbtError>> {
+    Ok(Psbt::from_str(s).expect("Failed to parse psbt"))
 }

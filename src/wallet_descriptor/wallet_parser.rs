@@ -39,7 +39,7 @@ pub fn parse_descriptor(
     descriptor: &str,
     change_descriptor: Option<&str>,
     network: Network,
-    start_height: u32
+    start_height: u32,
 ) -> Result<ParsedDescriptor, DescriptorError> {
     let secp = Secp256k1::new();
 
@@ -70,7 +70,7 @@ pub fn parse_descriptor(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
-        start_height
+        start_height,
     })
 }
 

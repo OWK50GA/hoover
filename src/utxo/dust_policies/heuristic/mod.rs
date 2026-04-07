@@ -30,7 +30,12 @@ pub fn aggregate(
         weighted_sum += signal * w;
         total_weight += w;
         if signal > 0.0 {
-            reasons.push(format!("{} (signal={:.2}, weight={:.2})", h.name(), signal, w));
+            reasons.push(format!(
+                "{} (signal={:.2}, weight={:.2})",
+                h.name(),
+                signal,
+                w
+            ));
         }
     }
 

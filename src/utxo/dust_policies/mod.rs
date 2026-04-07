@@ -1,2 +1,2 @@
-pub mod static_policy;
 pub mod heuristic;
+pub mod static_policy;

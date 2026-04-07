@@ -32,10 +32,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Install bitcoind
+      - name: Download bitcoind
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y bitcoind
+          wget -q https://bitcoincore.org/bin/bitcoin-core-28.1/bitcoin-28.1-x86_64-linux-gnu.tar.gz
+          tar xzf bitcoin-28.1-x86_64-linux-gnu.tar.gz
+          echo "BITCOIND_EXE=$PWD/bitcoin-28.1/bin/bitcoind" >> $GITHUB_ENV
 
       - name: Build
         run: cargo build --all-targets
