@@ -1,0 +1,22 @@
+[package]
+name = "hoover"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+thiserror = "2"
+bdk_wallet = "2"
+bdk_bitcoind_rpc = "0.22"
+bdk_redb = "0.1.1"
+clap = { version = "4", features = ["derive", "env"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3.22"
+bitcoin = "0.32.8"
+corepc-node = { version = "0.10.1", features = ["anyhow", "28_0"] }
+tabled = "0.20.0"
+
+[dev-dependencies]
+tempfile = "3"
+corepc-node = { version = "0.10.1", features = ["anyhow", "28_0"] }
