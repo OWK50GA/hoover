@@ -1,7 +1,7 @@
 use bdk_wallet::KeychainKind;
 
-use crate::utxo::dust_policy::UtxoContext;
 use crate::utxo::dust_policies::heuristic::DustHeuristic;
+use crate::utxo::dust_policy::UtxoContext;
 use crate::utxo::utxo_parser::Utxo;
 
 /// Flags dust received on an internal (change) address.
@@ -53,7 +53,10 @@ mod tests {
 
     fn dummy_utxo() -> Utxo {
         Utxo {
-            outpoint: OutPoint { txid: Txid::all_zeros(), vout: 0 },
+            outpoint: OutPoint {
+                txid: Txid::all_zeros(),
+                vout: 0,
+            },
             value: Amount::from_sat(300),
             script_pubkey: ScriptBuf::new(),
             block_height: 800_000,

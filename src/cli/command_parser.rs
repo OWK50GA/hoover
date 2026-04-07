@@ -229,12 +229,17 @@ mod tests {
     #[test]
     fn add_with_change_descriptor() {
         let cli = parse(&[
-            "hoover", "add",
-            "--descriptor", "wpkh(xpub123/0/*)",
-            "--change-descriptor", "wpkh(xpub123/1/*)",
+            "hoover",
+            "add",
+            "--descriptor",
+            "wpkh(xpub123/0/*)",
+            "--change-descriptor",
+            "wpkh(xpub123/1/*)",
         ]);
         match cli.command {
-            Commands::Add { change_descriptor, .. } => {
+            Commands::Add {
+                change_descriptor, ..
+            } => {
                 assert_eq!(change_descriptor.as_deref(), Some("wpkh(xpub123/1/*)"));
             }
             _ => panic!("expected Add"),
@@ -303,7 +308,10 @@ mod tests {
     fn broadcast_no_args_is_valid() {
         // No psbt required — broadcasts all files in output dir
         let cli = parse(&["hoover", "broadcast"]);
-        assert!(matches!(cli.command, Commands::Broadcast { psbt: None, .. }));
+        assert!(matches!(
+            cli.command,
+            Commands::Broadcast { psbt: None, .. }
+        ));
     }
 
     #[test]

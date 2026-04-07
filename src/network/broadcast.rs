@@ -50,16 +50,21 @@ pub fn broadcast(rpc: &Client, tx: &Transaction) -> Result<Txid, BroadcastError>
 /// since the OP_RETURN output carries Amount::ZERO).
 ///
 /// The caller must re-sign and re-broadcast the returned PSBT.
-pub fn bump_fee(rpc: &Client, psbt: &Psbt, new_fee_rate: FeeRate) -> Result<Psbt, BumpFeeError> {
+pub fn bump_fee(
+    rpc: &Client,
+    psbt: &Psbt,
+    new_fee_rate: FeeRate,
+) -> Result<Psbt, Box<BumpFeeError>> {
     // 1. Verify the original tx is still unconfirmed
     let original_txid = psbt.unsigned_tx.compute_txid();
     let in_mempool = rpc.get_mempool_entry(original_txid).is_ok();
     if !in_mempool {
         // Not in mempool — check if it's confirmed
-        if let Ok(raw) = rpc.get_raw_transaction_verbose(original_txid) && let Ok(info) = raw.into_model() {
-            if info.confirmations.unwrap_or(0) > 0 {
-                return Err(BumpFeeError::AlreadyConfirmed);
-            }
+        if let Ok(raw) = rpc.get_raw_transaction_verbose(original_txid)
+            && let Ok(info) = raw.into_model()
+            && info.confirmations.unwrap_or(0) > 0
+        {
+            return Err(Box::new(BumpFeeError::AlreadyConfirmed));
         }
         // Evicted from mempool — still valid to rebroadcast a replacement
     }
@@ -67,7 +72,7 @@ pub fn bump_fee(rpc: &Client, psbt: &Psbt, new_fee_rate: FeeRate) -> Result<Psbt
     // 2. Verify inputs signal RBF
     let signals_rbf = psbt.unsigned_tx.input.iter().any(|i| i.sequence.is_rbf());
     if !signals_rbf {
-        return Err(BumpFeeError::RbfNotSignalled);
+        return Err(Box::new(BumpFeeError::RbfNotSignalled));
     }
 
     // 3. Compute original implicit fee rate
@@ -85,10 +90,10 @@ pub fn bump_fee(rpc: &Client, psbt: &Psbt, new_fee_rate: FeeRate) -> Result<Psbt
     let new_rate_kwu = new_fee_rate.to_sat_per_kwu();
     let orig_rate_kwu = original_fee_rate.to_sat_per_kwu();
     if new_rate_kwu <= orig_rate_kwu {
-        return Err(BumpFeeError::FeeRateNotHigher {
+        return Err(Box::new(BumpFeeError::FeeRateNotHigher {
             original: orig_rate_kwu,
             new: new_rate_kwu,
-        });
+        }));
     }
 
     // 4. Check the new fee is coverable by the inputs
@@ -97,14 +102,15 @@ pub fn bump_fee(rpc: &Client, psbt: &Psbt, new_fee_rate: FeeRate) -> Result<Psbt
         .map(|a| a.to_sat())
         .unwrap_or(u64::MAX);
     if new_fee_sats > total_input_sats {
-        return Err(BumpFeeError::InsufficientInputValue {
+        return Err(Box::new(BumpFeeError::InsufficientInputValue {
             input_sats: total_input_sats,
             fee_sats: new_fee_sats,
-        });
+        }));
     }
 
     // 5. Rebuild PSBT with same inputs/outputs, preserving witness_utxo metadata
-    let mut replacement = Psbt::from_unsigned_tx(psbt.unsigned_tx.clone())?;
+    let mut replacement =
+        Psbt::from_unsigned_tx(psbt.unsigned_tx.clone()).expect("Failed to rebuild psbt");
     replacement.inputs = psbt.inputs.clone();
     replacement.outputs = psbt.outputs.clone();
 
