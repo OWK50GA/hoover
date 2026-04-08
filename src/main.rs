@@ -6,7 +6,14 @@ use hoover::{
     network::monitoring::{TxStatus, tx_status},
     psbt::psbt_builder::{build_sweep_psbt, finalize_psbt, read_psbt_file, write_psbt_file},
     redb::storage::Store,
-    utxo::utxo_parser::{DustReason, DustUtxo, Utxo},
+    utxo::{
+        context::{build_context, build_tx_cache},
+        dust_policies::heuristic::{
+            DustHeuristic, aggregate, change_address::ChangeAddressHeuristic,
+            exact_floor::ExactFloorPolicy, multi_address::MultiAddressHeuristic,
+        },
+        utxo_parser::{DustReason, DustUtxo, Utxo},
+    },
     wallet_descriptor::wallet_parser::parse_descriptor,
 };
 use std::path::PathBuf;
@@ -108,10 +115,15 @@ fn list(config: Config, fingerprint: Option<String>) {
         return;
     }
 
-    let mut all_dust: Vec<DustUtxo> = Vec::new();
+    let tip_height = config.rpc_client.get_block_count().unwrap_or(0) as u32;
+
+    let mut all_utxos: Vec<Utxo> = Vec::new();
+    let mut descriptor_map: Vec<(
+        Utxo,
+        &hoover::wallet_descriptor::wallet_parser::ParsedDescriptor,
+    )> = Vec::new();
 
     for descriptor in &descriptors {
-        // Skip descriptors that don't match the fingerprint filter
         if let Some(ref fp) = fingerprint
             && &descriptor.wallet_name != fp
         {
@@ -120,14 +132,82 @@ fn list(config: Config, fingerprint: Option<String>) {
 
         match Utxo::fetch_for_descriptor(&config.rpc_client, descriptor) {
             Ok(utxos) => {
-                let dust = Utxo::filter_dust_utxos(&utxos, config.dust_threshold);
-                all_dust.extend(dust);
+                for u in &utxos {
+                    descriptor_map.push((u.clone(), descriptor));
+                }
+                all_utxos.extend(utxos);
             }
-            Err(e) => {
-                eprintln!(
-                    "Warning: failed to fetch UTXOs for {}: {e}",
-                    descriptor.wallet_name
-                );
+            Err(e) => eprintln!(
+                "Warning: failed to fetch UTXOs for {}: {e}",
+                descriptor.wallet_name
+            ),
+        }
+    }
+
+    // Population 1: unconditional dust — below threshold, sweep regardless
+    let mut all_dust: Vec<DustUtxo> = Utxo::filter_dust_utxos(&all_utxos, config.dust_threshold);
+
+    // Deduplicate by outpoint
+    let mut seen = std::collections::HashSet::new();
+    all_dust.retain(|d| seen.insert(d.utxo.outpoint));
+
+    // Build tx cache covering all UTXOs — one getrawtransaction per unique txid
+    let tx_cache = build_tx_cache(
+        &config.rpc_client,
+        &all_utxos,
+        config.dust_threshold,
+        tip_height,
+    );
+
+    // Register heuristics
+    let heuristics: Vec<&dyn DustHeuristic> = vec![
+        &ChangeAddressHeuristic,
+        &ExactFloorPolicy,
+        &MultiAddressHeuristic,
+    ];
+
+    // Score population 1
+    for dust in &mut all_dust {
+        let descriptor = descriptor_map
+            .iter()
+            .find(|(u, _)| u.outpoint == dust.utxo.outpoint)
+            .map(|(_, d)| *d);
+        if let Some(desc) = descriptor {
+            let ctx = build_context(&dust.utxo, &all_utxos, &tx_cache, desc, tip_height);
+            let score = aggregate(&dust.utxo, &ctx, &heuristics);
+            dust.suspicion_score = Some(score.score);
+            dust.suspicion_reasons = score.reasons;
+        }
+    }
+
+    // Population 2: above threshold but within scan window (4x threshold)
+    // Only added if heuristic score exceeds suspicion threshold
+    const SUSPICION_THRESHOLD: f32 = 0.5;
+    let scan_window = config.dust_threshold * 4;
+    let already_included: std::collections::HashSet<_> =
+        all_dust.iter().map(|d| d.utxo.outpoint).collect();
+
+    for utxo in all_utxos.iter().filter(|u| {
+        let sats = u.value.to_sat();
+        sats >= config.dust_threshold
+            && sats < scan_window
+            && !already_included.contains(&u.outpoint)
+    }) {
+        let descriptor = descriptor_map
+            .iter()
+            .find(|(u, _)| u.outpoint == utxo.outpoint)
+            .map(|(_, d)| *d);
+        if let Some(desc) = descriptor {
+            let ctx = build_context(utxo, &all_utxos, &tx_cache, desc, tip_height);
+            let score = aggregate(utxo, &ctx, &heuristics);
+            if score.score >= SUSPICION_THRESHOLD {
+                all_dust.push(DustUtxo {
+                    utxo: utxo.clone(),
+                    reason: DustReason::SuspectedAttack { score: score.score },
+                    is_spent: false,
+                    suspicion_score: Some(score.score),
+                    suspicion_reasons: score.reasons,
+                });
             }
         }
     }
@@ -144,10 +224,6 @@ fn list(config: Config, fingerprint: Option<String>) {
         .db
         .upsert_utxos(&all_dust)
         .expect("Failed to store dust to table");
-
-    // Deduplicate by outpoint — same UTXO can appear under multiple descriptors
-    let mut seen = std::collections::HashSet::new();
-    all_dust.retain(|d| seen.insert(d.utxo.outpoint));
 
     let rows: Vec<DustRow> = all_dust.iter().map(DustRow::from).collect();
     let table = Table::new(&rows).to_string();
@@ -172,6 +248,8 @@ struct DustRow {
     block_height: u32,
     #[tabled(rename = "Reason")]
     reason: String,
+    #[tabled(rename = "Score")]
+    score: String,
     #[tabled(rename = "Wallet")]
     wallet: String,
 }
@@ -191,6 +269,7 @@ impl From<&DustUtxo> for DustRow {
                 value_sats,
             } => format!("uneconomical (fee {fee_to_spend_sats} > value {value_sats})"),
             DustReason::SuspiciousRoundValue => "suspicious round value".to_string(),
+            DustReason::SuspectedAttack { score } => format!("suspected attack (score {score:.2})"),
         };
 
         DustRow {
@@ -199,6 +278,10 @@ impl From<&DustUtxo> for DustRow {
             value_sats: d.utxo.value.to_sat(),
             block_height: d.utxo.block_height,
             reason,
+            score: d
+                .suspicion_score
+                .map(|s| format!("{:.2}", s))
+                .unwrap_or_else(|| "-".to_string()),
             wallet: d.utxo.descriptor_fingerprint.clone(),
         }
     }

@@ -1,7 +1,7 @@
 use bdk_wallet::KeychainKind;
 
+use crate::utxo::dust_policies::UtxoContext;
 use crate::utxo::dust_policies::heuristic::DustHeuristic;
-use crate::utxo::dust_policy::UtxoContext;
 use crate::utxo::utxo_parser::Utxo;
 
 /// Flags dust received on an internal (change) address.
@@ -18,14 +18,18 @@ use crate::utxo::utxo_parser::Utxo;
 ///   0.0 — external keychain (normal receive address)
 pub struct ChangeAddressHeuristic;
 
+impl ChangeAddressHeuristic {
+    const NAME: &'static str = "dust_on_change_address";
+    const WEIGHT: f32 = 3.0;
+}
+
 impl DustHeuristic for ChangeAddressHeuristic {
     fn name(&self) -> &'static str {
-        "dust_on_change_address"
+        Self::NAME
     }
 
     fn weight(&self) -> f32 {
-        // High weight — receiving dust on a change address is a very strong signal
-        3.0
+        Self::WEIGHT
     }
 
     fn evaluate(&self, _utxo: &Utxo, ctx: &UtxoContext) -> f32 {
@@ -47,7 +51,7 @@ impl DustHeuristic for ChangeAddressHeuristic {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utxo::dust_policy::UtxoContext;
+    use crate::utxo::dust_policies::UtxoContext;
     use crate::utxo::utxo_parser::Utxo;
     use bitcoin::{AddressType, Amount, OutPoint, ScriptBuf, Txid, hashes::Hash};
 

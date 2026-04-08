@@ -24,6 +24,11 @@ pub enum DustReason {
         value_sats: u64,
     },
     SuspiciousRoundValue,
+    /// Heuristic scoring flagged this UTXO as a suspected dust attack.
+    /// Value is above the dust threshold but behavioural signals are strong.
+    SuspectedAttack {
+        score: f32,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,6 +36,10 @@ pub struct DustUtxo {
     pub utxo: Utxo,
     pub reason: DustReason,
     pub is_spent: bool,
+    /// Heuristic suspicion score in [0.0, 1.0]. None if not yet evaluated.
+    pub suspicion_score: Option<f32>,
+    /// Human-readable reasons from each heuristic that fired.
+    pub suspicion_reasons: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -124,6 +133,8 @@ impl Utxo {
                         threshold_sats: 546,
                     },
                     is_spent: false,
+                    suspicion_score: None,
+                    suspicion_reasons: vec![],
                 };
                 dust_utxos.push(dust_utxo);
                 continue;
@@ -263,6 +274,8 @@ mod tests {
                 threshold_sats: 546,
             },
             is_spent: false,
+            suspicion_score: None,
+            suspicion_reasons: vec![],
         }
     }
 
