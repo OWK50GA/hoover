@@ -36,8 +36,7 @@ impl DustHeuristic for SprayPatternHeuristic {
         }
 
         // Signal 1: dust output ratio
-        let dust_ratio =
-            ctx.source_dust_output_count as f32 / ctx.source_output_count as f32;
+        let dust_ratio = ctx.source_dust_output_count as f32 / ctx.source_output_count as f32;
         let signal_dust = if dust_ratio >= 0.8 {
             1.0
         } else if dust_ratio >= 0.5 {
@@ -156,6 +155,9 @@ mod tests {
         // mean = (0.7 + 0.4 + 0.6) / 3 = 0.5667
         let score = h.evaluate(&dummy_utxo(), &ctx(5, 3, 1, 5));
         let expected = (0.7_f32 + 0.4 + 0.6) / 3.0;
-        assert!((score - expected).abs() < 1e-5, "score={score}, expected={expected}");
+        assert!(
+            (score - expected).abs() < 1e-5,
+            "score={score}, expected={expected}"
+        );
     }
 }
