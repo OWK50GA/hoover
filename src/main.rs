@@ -11,6 +11,7 @@ use hoover::{
         dust_policies::heuristic::{
             DustHeuristic, aggregate, change_address::ChangeAddressHeuristic,
             exact_floor::ExactFloorPolicy, multi_address::MultiAddressHeuristic,
+            spray_pattern::SprayPatternHeuristic,
         },
         utxo_parser::{DustReason, DustUtxo, Utxo},
     },
@@ -164,6 +165,7 @@ fn list(config: Config, fingerprint: Option<String>) {
         &ChangeAddressHeuristic,
         &ExactFloorPolicy,
         &MultiAddressHeuristic,
+        &SprayPatternHeuristic,
     ];
 
     // Score population 1
